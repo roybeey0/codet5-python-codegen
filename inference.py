@@ -8,7 +8,7 @@ import torch
 from transformers import AutoTokenizer, T5ForConditionalGeneration
 
 DEFAULT_MODEL = "./outputs/codet5-python-codegen"
-FALLBACK_MODEL = "Salesforce/codet5-base"
+FALLBACK_MODEL = "roybeey/codet5-python-codegen"
 
 
 def load_model(model_path: str = DEFAULT_MODEL):
