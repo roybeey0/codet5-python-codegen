@@ -50,7 +50,7 @@ Output → def factorial(n):
 | **Model** | `Salesforce/codet5-base` — encoder-decoder Transformer (220M params) |
 | **Training** | Seq2Seq cross-entropy loss, teacher forcing |
 | **Decoding** | Beam search (width=5) + nucleus sampling (top-p=0.95) |
-| **Evaluation** | BLEU-4, ROUGE-1/L, Keyword Match, Exact Match |
+| **Evaluation** | BLEU-4, ROUGE-1/L |
 
 ---
 
@@ -58,11 +58,11 @@ Output → def factorial(n):
 
 **[CodeSearchNet Python](https://huggingface.co/datasets/code_search_net)**
 
-| Split | Size |
-|-------|------|
-| Train | ~412K samples |
-| Validation | ~13K samples |
-| Test | ~14K samples |
+| Split | Full Size | Used |
+|-------|------|------|
+| Train | ~412K samples | 50K samples |
+| Validation | ~23K samples | 2K samples |
+| Test | ~22K samples | 22K samples |
 
 Each sample contains a Python function with its docstring. We use:
 - **Input**: `func_documentation_string` (natural language)
@@ -70,16 +70,52 @@ Each sample contains a Python function with its docstring. We use:
 
 ---
 
-## 📈 Results
+## 📈 Training Results
 
 | Metric | Score |
 |--------|-------|
-| **BLEU-4** | ~18–22 |
-| **ROUGE-1** | ~0.42 |
-| **ROUGE-L** | ~0.38 |
-| **Keyword Match** | ~71% |
+| **BLEU-4** | **54.66** |
+| **ROUGE-1** | 0.611 |
+| **ROUGE-L** | 0.594 |
+| **Train Loss** | 1.071 |
+| **Epochs** | 3 |
+| **Training Time** | ~3h 51m (Kaggle P100) |
 
-> Results may vary based on training duration, hardware, and hyperparameters.
+---
+
+## ⚠️ Current Limitations
+
+This model was trained on **50K samples (out of 412K)** with only **3 epochs** due to computational constraints. As a result:
+
+- The model works well for **simple, common functions** (file reading, basic data structures)
+- The model struggles with **complex algorithms** (recursion, sorting logic, prime checking)
+- Generated code may have **structural correctness** but **logical errors**
+
+### To improve model accuracy:
+
+| Improvement | Expected Gain |
+|---|---|
+| Train on full 412K samples | +10-15% BLEU |
+| Increase to 10+ epochs | +5-10% BLEU |
+| Use `codet5-large` (770M params) | +15-20% BLEU |
+| Use `codet5p-2b` (2B params) | +25-30% BLEU |
+
+> 💡 **Note:** This project is intended as a portfolio demonstration of the fine-tuning pipeline, not as a production-ready code generation tool. For production use, consider training on the full dataset with a larger model.
+
+---
+
+## 🤗 Pre-trained Model
+
+The fine-tuned model is available on HuggingFace Hub:
+
+**[roybeey/codet5-python-codegen](https://huggingface.co/roybeey/codet5-python-codegen)**
+
+```python
+from transformers import T5ForConditionalGeneration, AutoTokenizer
+
+model = T5ForConditionalGeneration.from_pretrained("roybeey/codet5-python-codegen")
+tokenizer = AutoTokenizer.from_pretrained("roybeey/codet5-python-codegen")
+```
 
 ---
 
@@ -88,7 +124,7 @@ Each sample contains a Python function with its docstring. We use:
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/codet5-python-codegen.git
+git clone https://github.com/roybeey0/codet5-python-codegen.git
 cd codet5-python-codegen
 
 python -m venv venv
@@ -106,27 +142,13 @@ python train.py
 
 > 💡 **Tip:** To do a quick sanity check, uncomment the subset lines in `train.py` to train on 5K samples first.
 
-### 3. Evaluate
+### 3. Inference (CLI)
 
 ```bash
-python evaluate.py \
-  --model_path ./outputs/codet5-python-codegen \
-  --split test \
-  --max_samples 500
+python inference.py
 ```
 
-### 4. Inference (CLI)
-
-```bash
-# Single docstring
-python inference.py \
-  --docstring "Return all prime numbers up to n using the Sieve of Eratosthenes."
-
-# Run built-in demo examples
-python inference.py --demo
-```
-
-### 5. Web UI (Gradio)
+### 4. Web UI (Gradio)
 
 ```bash
 python app.py
@@ -142,13 +164,13 @@ codet5-python-codegen/
 │
 ├── train.py            # Fine-tuning pipeline (load → preprocess → train → save)
 ├── inference.py        # Code generation from docstrings
-├── evaluate.py         # BLEU, ROUGE, Keyword Match evaluation
+├── eval_metrics.py     # BLEU, ROUGE evaluation
 ├── app.py              # Gradio web demo UI
 │
 ├── outputs/            # (git-ignored) Trained model checkpoints
 │   └── codet5-python-codegen/
 │       ├── config.json
-│       ├── pytorch_model.bin
+│       ├── model.safetensors
 │       └── tokenizer_config.json
 │
 ├── requirements.txt
@@ -167,24 +189,21 @@ codet5-python-codegen/
 | Batch size | 8 |
 | Learning rate | 5e-5 |
 | Warmup steps | 500 |
-| Epochs | 5 (early stopping, patience=2) |
+| Epochs | 3 |
 | Optimizer | AdamW |
-| Scheduler | Linear with warmup |
 | Precision | FP16 (if GPU available) |
 | Beam search width | 5 |
 
 ---
 
-## 🖥️ Hardware Requirements
+## 🖥️ Hardware Used
 
-| Setup | Recommended |
+| | Spec |
 |-------|-------------|
-| GPU | NVIDIA 16GB+ (e.g. RTX 3080, A100) |
-| RAM | 16GB+ |
-| Storage | ~10GB (dataset + model) |
-| Training time | ~3–6 hrs (full dataset, single GPU) |
-
-> Using Google Colab Pro (A100) is recommended for free GPU access.
+| GPU | Kaggle P100 (16GB) |
+| RAM | 29GB |
+| Training time | ~3h 51m |
+| Dataset | 50K / 412K samples |
 
 ---
 
@@ -195,14 +214,11 @@ codet5-python-codegen/
 MODEL_NAME = "Salesforce/codet5-large"
 ```
 
-**Change the task prefix:**
+**Train on full dataset:**
 ```python
-source = f"Summarize Python: {code}"   # for code summarization
-```
-
-**Add W&B tracking:**
-```python
-report_to = "wandb"   # in Seq2SeqTrainingArguments
+# Comment out these lines in train.py:
+# raw_dataset["train"] = raw_dataset["train"].select(range(50000))
+# raw_dataset["validation"] = raw_dataset["validation"].select(range(2000))
 ```
 
 ---
@@ -224,8 +240,8 @@ MIT License — feel free to use, modify, and distribute.
 
 ## 👤 Author
 
-**Your Name**  
-[GitHub](https://github.com/YOUR_USERNAME) · [LinkedIn](https://linkedin.com/in/YOUR_PROFILE) · [Portfolio](https://yourportfolio.dev)
+**roybeey**  
+[GitHub](https://github.com/roybeey0) · [HuggingFace](https://huggingface.co/roybeey)
 
 ---
 
