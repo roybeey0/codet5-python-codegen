@@ -35,7 +35,7 @@ MAX_INPUT_LENGTH = 256
 MAX_TARGET_LENGTH = 256
 BATCH_SIZE = 8
 EVAL_BATCH_SIZE = 16
-NUM_TRAIN_EPOCHS = 5
+NUM_TRAIN_EPOCHS = 3
 LEARNING_RATE = 5e-5
 WARMUP_STEPS = 500
 WEIGHT_DECAY = 0.01
@@ -98,6 +98,11 @@ class CodeGenDataset(Dataset):
 def load_data():
     logger.info("📦 Loading CodeSearchNet Python dataset...")
     dataset = load_dataset("code_search_net", "python", trust_remote_code=True)
+
+    # 50K samples
+    dataset["train"] = dataset["train"].select(range(50000))
+    dataset["validation"] = dataset["validation"].select(range(2000))
+
     logger.info(f"  Train size : {len(dataset['train'])}")
     logger.info(f"  Valid size : {len(dataset['validation'])}")
     logger.info(f"  Test  size : {len(dataset['test'])}")
@@ -156,10 +161,6 @@ def train():
     logger.info(f"  Total parameters: {total_params:,}")
 
     raw_dataset = load_data()
-
-    # Uncomment untuk test cepat dulu:
-    # raw_dataset["train"] = raw_dataset["train"].select(range(5000))
-    # raw_dataset["validation"] = raw_dataset["validation"].select(range(500))
 
     train_dataset = CodeGenDataset(raw_dataset["train"], tokenizer, MAX_INPUT_LENGTH, MAX_TARGET_LENGTH)
     val_dataset   = CodeGenDataset(raw_dataset["validation"], tokenizer, MAX_INPUT_LENGTH, MAX_TARGET_LENGTH)
