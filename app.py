@@ -4,9 +4,18 @@ os.environ["LANG"] = "en_US.UTF-8"
 os.environ["LANGUAGE"] = "en"
 
 import gradio as gr
-from inference import load_model, generate_code, DEMO_DOCSTRINGS
+from inference import load_model, generate_code
 
 model, tokenizer, device = load_model()
+
+DEMO_DOCSTRINGS = [
+    "Calculate the factorial of n recursively",
+    "Check if a number is prime",
+    "Sort a list of integers in ascending order",
+    "Convert a string to title case",
+    "Find the maximum value in a list",
+    "Reverse a string without using built-in functions",
+]
 
 def generate(docstring, num_candidates, num_beams, temperature, top_p, max_output_tokens):
     if not docstring.strip():
@@ -17,11 +26,9 @@ def generate(docstring, num_candidates, num_beams, temperature, top_p, max_outpu
         model=model,
         tokenizer=tokenizer,
         device=device,
-        max_target_length=max_output_tokens,
+        max_length=max_output_tokens,
         num_beams=max(num_beams, num_candidates),
         num_return_sequences=num_candidates,
-        temperature=temperature,
-        top_p=top_p,
     )
 
     output = ""
@@ -30,6 +37,7 @@ def generate(docstring, num_candidates, num_beams, temperature, top_p, max_outpu
         output += code.strip() + "\n\n"
 
     return output.strip()
+
 
 CSS = """
 #title { text-align: center; font-size: 2rem; font-weight: 700; margin-bottom: 4px; }

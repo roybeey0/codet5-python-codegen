@@ -1,125 +1,92 @@
 """
-inference.py — Generate Python code from a natural language docstring
+Inference module for CodeT5 Python Code Generation
 """
 
-import argparse
 import os
 import torch
-from transformers import AutoTokenizer, T5ForConditionalGeneration
+from transformers import T5ForConditionalGeneration, AutoTokenizer
 
-DEFAULT_MODEL = "./outputs/codet5-python-codegen"
+# ─────────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────────
 FALLBACK_MODEL = "roybeey/codet5-python-codegen"
 
+MAX_INPUT_LENGTH = 256
+MAX_TARGET_LENGTH = 256
+NUM_BEAMS = 5
+NUM_RETURN_SEQUENCES = 3
 
-def load_model(model_path: str = DEFAULT_MODEL):
-    abs_path = os.path.abspath(model_path)
 
-    if os.path.isdir(abs_path):
-        use_path = abs_path
-        print(f"✅ Loaded fine-tuned model from: {use_path}")
-    else:
-        use_path = FALLBACK_MODEL
-        print(f"⚠️  Fine-tuned model not found. Using base model: {FALLBACK_MODEL}")
+# ─────────────────────────────────────────────
+# LOAD MODEL
+# ─────────────────────────────────────────────
 
-    tokenizer = AutoTokenizer.from_pretrained(use_path)
-    model = T5ForConditionalGeneration.from_pretrained(use_path)
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+def load_model():
+    print(f"⬇️ Loading model from HuggingFace: {FALLBACK_MODEL}")
+    tokenizer = AutoTokenizer.from_pretrained(FALLBACK_MODEL)
+    model = T5ForConditionalGeneration.from_pretrained(FALLBACK_MODEL)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    model.eval()
-    print(f"🖥️  Device: {device}")
+    print(f"✅ Model loaded on: {device}")
     return model, tokenizer, device
 
 
-def generate_code(
-    docstring: str,
-    model,
-    tokenizer,
-    device: str,
-    max_input_length: int = 256,
-    max_target_length: int = 256,
-    num_beams: int = 5,
-    num_return_sequences: int = 3,
-    temperature: float = 0.8,
-    top_p: float = 0.95,
-    repetition_penalty: float = 1.2,
-) -> list:
+# ─────────────────────────────────────────────
+# GENERATE CODE
+# ─────────────────────────────────────────────
+
+def generate_code(docstring, model, tokenizer, device,
+                  max_length=MAX_TARGET_LENGTH,
+                  num_beams=NUM_BEAMS,
+                  num_return_sequences=NUM_RETURN_SEQUENCES):
+    """
+    Generate Python code from a natural language docstring.
+    """
     source = f"Generate Python: {docstring.strip()}"
 
     inputs = tokenizer(
         source,
-        return_tensors="pt",
-        max_length=max_input_length,
+        max_length=MAX_INPUT_LENGTH,
         truncation=True,
-        padding=True,
+        padding="max_length",
+        return_tensors="pt",
     ).to(device)
 
     with torch.no_grad():
         outputs = model.generate(
             input_ids=inputs["input_ids"],
             attention_mask=inputs["attention_mask"],
-            max_new_tokens=max_target_length,
-            num_beams=max(num_beams, num_return_sequences),
+            max_length=max_length,
+            num_beams=num_beams,
             num_return_sequences=num_return_sequences,
             early_stopping=True,
-            temperature=temperature,
-            top_p=top_p,
-            repetition_penalty=repetition_penalty,
             no_repeat_ngram_size=3,
         )
 
-    decoded = [
-        tokenizer.decode(out, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-        for out in outputs
-    ]
-    return decoded
+    results = []
+    for output in outputs:
+        code = tokenizer.decode(output, skip_special_tokens=True)
+        results.append(code.strip())
+
+    return results
 
 
-DEMO_DOCSTRINGS = [
-    "Calculate the factorial of a given non-negative integer n using recursion.",
-    "Return the list of all prime numbers up to n using the Sieve of Eratosthenes.",
-    "Merge two sorted lists into a single sorted list.",
-    "Flatten a nested list of arbitrary depth into a single flat list.",
-    "Compute the Fibonacci sequence up to n terms and return as a list.",
-    "Check whether a given string is a palindrome, ignoring case and spaces.",
-    "Perform binary search on a sorted list and return the index of the target.",
-    "Count the frequency of each word in a string and return a dictionary.",
-]
-
-
-def run_demo(model, tokenizer, device):
-    print("\n" + "="*60)
-    print("  CodeT5 Python Code Generation - Demo")
-    print("="*60)
-    for i, docstring in enumerate(DEMO_DOCSTRINGS[:3], 1):
-        print(f"\n[Example {i}]")
-        print(f"Docstring: {docstring}")
-        print("-"*50)
-        results = generate_code(docstring, model, tokenizer, device, num_return_sequences=1)
-        print("Generated Code:")
-        print(results[0] if results else "(no output)")
-        print("-"*50)
-
+# ─────────────────────────────────────────────
+# MAIN (test)
+# ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, default=DEFAULT_MODEL)
-    parser.add_argument("--docstring", type=str, default=None)
-    parser.add_argument("--demo", action="store_true")
-    parser.add_argument("--num_results", type=int, default=3)
-    args = parser.parse_args()
+    model, tokenizer, device = load_model()
 
-    model, tokenizer, device = load_model(args.model_path)
+    test_docstrings = [
+        "Calculate the factorial of n recursively",
+        "Check if a number is prime",
+        "Sort a list of integers in ascending order",
+    ]
 
-    if args.demo or args.docstring is None:
-        run_demo(model, tokenizer, device)
-    else:
-        results = generate_code(
-            args.docstring, model, tokenizer, device,
-            num_return_sequences=args.num_results
-        )
-        print(f"\nDocstring: {args.docstring}\n")
+    for docstring in test_docstrings:
+        print(f"\n📝 Input: {docstring}")
+        print("🔧 Generated Code:")
+        results = generate_code(docstring, model, tokenizer, device)
         for i, code in enumerate(results, 1):
-            print(f"-- Candidate {i} --")
-            print(code)
-            print()
+            print(f"  [{i}] {code}")
